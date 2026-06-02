@@ -13,9 +13,7 @@
       "imports": {
         "react": "https://esm.sh/react@18.2.0",
         "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
-        "lucide-react": "https://esm.sh/lucide-react@0.344.0",
-        "@formkit/auto-animate": "https://esm.sh/@formkit/auto-animate@0.8.1",
-        "canvas-confetti": "https://esm.sh/canvas-confetti@1.9.2"
+        "lucide-react": "https://esm.sh/lucide-react@0.344.0"
       }
     }
   </script>
@@ -26,9 +24,8 @@
     body {
       margin: 0;
       padding: 0;
-      background-color: #0f0e0b;
+      background-color: #0f0e0b; /* Matches dark theme background to prevent flashing */
       -webkit-tap-highlight-color: transparent;
-      overflow-x: hidden;
     }
   </style>
 </head>
@@ -40,15 +37,14 @@
     import { createRoot } from "react-dom/client";
     import {
       Plus, Check, Calendar, Settings, Trash2, Download, Upload,
-      Sun, Moon, X, Edit2, Clock, Home, History, Bell, Link
+      Sun, Moon, X, Edit2, Clock, Home, RotateCcw, ChevronRight,
+      Bell, AlertTriangle
     } from "lucide-react";
-    import autoAnimate from "@formkit/auto-animate";
-    import confetti from "canvas-confetti";
 
     // ─── Constants ────────────────────────────────────────────────────────────────
-    const STORAGE_KEY = "recurr_tasks_v3";
-    const PREFS_KEY   = "recurr_prefs_v3";
-    const CATS_KEY    = "recurr_cats_v3";
+    const STORAGE_KEY = "recurr_tasks_v2";
+    const PREFS_KEY   = "recurr_prefs_v2";
+    const CATS_KEY    = "recurr_cats_v2";
 
     const DEFAULT_CATS = ["Auto","Home","Health","Family","Admin","Finance","Personal"];
 
@@ -71,6 +67,17 @@
     };
     const catColor = (cat) => CAT_PALETTE[cat] || "#94a3b8";
 
+    const SAMPLE_TASKS = [
+      { name:"Change oil",       category:"Auto",    frequency:{ value:6,  unit:"months" }, timeOfDay:"Morning",  daysFromNow:-2  },
+      { name:"Dentist checkup",  category:"Health",  frequency:{ value:6,  unit:"months" }, timeOfDay:"Morning",  daysFromNow:0   },
+      { name:"Order diapers",    category:"Family",  frequency:{ value:2,  unit:"weeks"  }, timeOfDay:"Afternoon",daysFromNow:0   },
+      { name:"Pay credit card",  category:"Finance", frequency:{ value:1,  unit:"months" }, timeOfDay:null,       daysFromNow:3   },
+      { name:"Water plants",     category:"Home",    frequency:{ value:1,  unit:"weeks"  }, timeOfDay:"Evening",  daysFromNow:0   },
+      { name:"Review budget",    category:"Finance", frequency:{ value:1,  unit:"months" }, timeOfDay:null,       daysFromNow:10  },
+      { name:"Car battery check",category:"Auto",    frequency:{ value:3,  unit:"years"  }, timeOfDay:null,       daysFromNow:45  },
+      { name:"Rotate tires",     category:"Auto",    frequency:{ value:6,  unit:"months" }, timeOfDay:null,       daysFromNow:25  },
+    ];
+
     // ─── Utils ────────────────────────────────────────────────────────────────────
     const uid = () => `t${Date.now()}${Math.random().toString(36).slice(2,6)}`;
 
@@ -88,7 +95,9 @@
       return d.toISOString().split("T")[0];
     };
 
-    const dayDiff = (a, b) => Math.round((new Date(b+"T12:00:00") - new Date(a+"T12:00:00")) / 86400000);
+    const dayDiff = (a, b) => Math.round(
+      (new Date(b+"T12:00:00") - new Date(a+"T12:00:00")) / 86400000
+    );
 
     const dateLabel = (dateStr) => {
       const t = todayStr();
@@ -132,301 +141,928 @@
       --t3:      #5a5442;
       --ac:      #c9a84c;
       --acbg:    rgba(201,168,76,0.14);
+      --acglow:  rgba(201,168,76,0.32);
       --danger:  #d94f3d;
       --dangbg:  rgba(217,79,61,0.12);
       --ok:      #4db87e;
       --okbg:    rgba(77,184,126,0.12);
       --blue:    #5b9bd5;
+      --bluebg:  rgba(91,155,213,0.12);
       font-family: 'DM Sans', sans-serif;
-      background: var(--bg); color: var(--t1);
-      min-height: 100vh; display: flex; flex-direction: column;
-      max-width: 480px; margin: 0 auto; position: relative;
+      background: var(--bg);
+      color: var(--t1);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      max-width: 480px;
+      margin: 0 auto;
+      position: relative;
+      -webkit-font-smoothing: antialiased;
     }
     .rr.light {
-      --bg:  #f5f2e8; --s1: #ffffff; --s2: #eeeadb; --s3: #e4dfc8;
-      --bd:  #cdc7b0; --t1: #1a1810; --t2: #6b6452; --t3: #9b937e;
+      --bg:  #f5f2e8;
+      --s1:  #ffffff;
+      --s2:  #eeeadb;
+      --s3:  #e4dfc8;
+      --bd:  #cdc7b0;
+      --t1:  #1a1810;
+      --t2:  #6b6452;
+      --t3:  #9b937e;
+      --acbg: rgba(201,168,76,0.1);
     }
     *{box-sizing:border-box;margin:0;padding:0;}
+    ::-webkit-scrollbar{width:3px;}
+    ::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px;}
 
-    /* Header & Nav */
-    .rr-header { position:sticky; top:0; z-index:30; background:rgba(var(--bg), 0.9); backdrop-filter:blur(8px); border-bottom:1px solid var(--bd); padding:13px 16px 12px; display:flex; align-items:center; justify-content:space-between; }
-    .rr-logo { font-family:'Syne',sans-serif; font-size:24px; font-weight:800; color:var(--ac); letter-spacing:-1px; display:flex; align-items:center; gap:6px; }
-    .rr-header-sub { font-family:'Space Mono',monospace; font-size:10px; color:var(--t3); margin-top:1px; }
+    /* Header */
+    .rr-header {
+      position:sticky; top:0; z-index:30;
+      background:var(--bg);
+      border-bottom:1px solid var(--bd);
+      padding:13px 16px 12px;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .rr-logo {
+      font-family:'Syne',sans-serif;
+      font-size:24px; font-weight:800;
+      color:var(--ac); letter-spacing:-1px;
+      display:flex; align-items:center; gap:6px;
+    }
+    .rr-logo-dot { width:6px; height:6px; border-radius:50%; background:var(--ac); margin-bottom:2px; }
+    .rr-header-sub {
+      font-family:'Space Mono',monospace;
+      font-size:10px; color:var(--t3); margin-top:1px; letter-spacing:0.5px;
+    }
+    .rr-hbtn {
+      width:36px; height:36px; border-radius:10px;
+      border:1px solid var(--bd); background:var(--s2);
+      cursor:pointer; display:flex; align-items:center; justify-content:center;
+      color:var(--t2); transition:all 0.15s;
+    }
+    .rr-hbtn:hover { background:var(--s3); color:var(--t1); }
+
+    /* Content */
     .rr-content { flex:1; overflow-y:auto; padding-bottom:130px; }
-    .rr-sec { padding:18px 16px 8px; font-family:'Space Mono',monospace; font-size:9px; letter-spacing:2.5px; text-transform:uppercase; color:var(--t3); display:flex; align-items:center; gap:10px; }
+
+    /* Section label */
+    .rr-sec {
+      padding:18px 16px 8px;
+      font-family:'Space Mono',monospace;
+      font-size:9px; letter-spacing:2.5px; text-transform:uppercase;
+      color:var(--t3);
+      display:flex; align-items:center; gap:10px;
+    }
     .rr-sec::after { content:''; flex:1; height:1px; background:var(--bd); }
-    
-    /* Swipe Wrapper */
-    .rr-card-wrapper { position:relative; margin:0 12px 8px; border-radius:15px; background:var(--s3); overflow:hidden; }
-    .rr-swipe-actions { position:absolute; inset:0; display:flex; align-items:center; justify-content:space-between; padding:0 20px; font-size:14px; font-weight:bold; }
-    .rr-swipe-left { color:var(--ok); }
-    .rr-swipe-right { color:var(--danger); }
 
     /* Task card */
-    .rr-card { background:var(--s1); border:1px solid var(--bd); border-radius:15px; padding:13px 13px 13px 16px; display:flex; align-items:flex-start; gap:11px; position:relative; z-index:2; touch-action: pan-y; }
-    .rr-card::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; border-radius:15px 0 0 15px; background:var(--cat-clr, var(--ac)); }
-    .rr-card.completed { opacity:0.6; }
-    
-    .rr-check { width:28px; height:28px; border-radius:50%; border:2px solid var(--bd); background:transparent; display:flex; align-items:center; justify-content:center; flex-shrink:0; color:transparent; transition:all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
-    .rr-check.done { border-color:var(--ok); background:var(--ok); color:#fff; transform:scale(1.1); }
-    .rr-tname { font-size:15px; font-weight:500; color:var(--t1); line-height:1.3; flex:1; }
-    .rr-tmeta { display:flex; align-items:center; gap:5px; margin-top:5px; flex-wrap:wrap; }
-    .rr-badge { padding:2px 8px; border-radius:8px; font-size:11px; font-weight:500; }
-    .rr-streak { display:flex; align-items:center; gap:3px; font-size:11px; color:#f97316; font-weight:700; background:rgba(249,115,22,0.15); padding:2px 6px; border-radius:6px; }
+    .rr-card {
+      margin:0 12px 8px;
+      background:var(--s1);
+      border:1px solid var(--bd);
+      border-radius:15px;
+      padding:13px 13px 13px 16px;
+      display:flex; align-items:flex-start; gap:11px;
+      transition:transform 0.15s, box-shadow 0.15s, opacity 0.3s;
+      position:relative; overflow:hidden;
+    }
+    .rr-card::before {
+      content:''; position:absolute; left:0; top:0; bottom:0;
+      width:4px; border-radius:15px 0 0 15px;
+      background:var(--cat-clr, var(--ac));
+    }
+    .rr-card.overdue { border-color:rgba(217,79,61,0.35); }
+    .rr-card.completing { opacity:0.5; transform:scale(0.98); }
+    .rr-card:hover { transform:translateY(-1px); box-shadow:0 6px 20px rgba(0,0,0,0.25); }
+    .rr-card.overdue:hover { box-shadow:0 6px 20px rgba(217,79,61,0.15); }
 
-    /* Forms & UI */
-    .rr-nav { position:fixed; bottom:0; width:100%; max-width:480px; background:var(--bg); border-top:1px solid var(--bd); display:flex; z-index:30; padding:8px 0 max(env(safe-area-inset-bottom), 6px); }
-    .rr-ntab { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; padding:5px 4px; border:none; background:none; cursor:pointer; color:var(--t3); font-size:10px; transition:color 0.15s; }
+    /* Check button */
+    .rr-check {
+      width:28px; height:28px; border-radius:50%;
+      border:2px solid var(--bd); background:transparent;
+      cursor:pointer; display:flex; align-items:center; justify-content:center;
+      flex-shrink:0; transition:all 0.2s; color:transparent; margin-top:1px;
+    }
+    .rr-check:hover { border-color:var(--ok); background:var(--okbg); color:var(--ok); }
+    .rr-check.done  { border-color:var(--ok); background:var(--ok); color:#fff; }
+
+    /* Task text */
+    .rr-tname {
+      font-size:15px; font-weight:500; color:var(--t1); line-height:1.3; flex:1;
+    }
+    .rr-tmeta {
+      display:flex; align-items:center; gap:5px; margin-top:5px; flex-wrap:wrap;
+    }
+    .rr-badge {
+      padding:2px 8px; border-radius:8px;
+      font-size:11px; font-weight:500;
+    }
+    .rr-freq {
+      font-size:11px; color:var(--t3);
+      font-family:'Space Mono',monospace;
+    }
+    .rr-datechip {
+      font-size:10px; font-family:'Space Mono',monospace;
+      padding:2px 7px; border-radius:6px;
+      background:var(--s2); color:var(--t2); border:1px solid var(--bd);
+    }
+    .rr-datechip.today   { background:var(--okbg);   color:var(--ok);     border-color:rgba(77,184,126,0.3); }
+    .rr-datechip.overdue { background:var(--dangbg); color:var(--danger); border-color:rgba(217,79,61,0.3); }
+
+    /* Action buttons on card */
+    .rr-acts { display:flex; gap:3px; margin-left:auto; flex-shrink:0; align-items:flex-start; margin-top:1px; }
+    .rr-act {
+      width:27px; height:27px; border-radius:8px;
+      border:1px solid var(--bd); background:transparent;
+      cursor:pointer; display:flex; align-items:center; justify-content:center;
+      color:var(--t3); transition:all 0.15s;
+    }
+    .rr-act:hover               { background:var(--s3); color:var(--t1); }
+    .rr-act.delay:hover { border-color:var(--blue);   color:var(--blue);   background:var(--bluebg); }
+    .rr-act.edit:hover  { border-color:var(--ac);     color:var(--ac);     background:var(--acbg); }
+    .rr-act.del:hover   { border-color:var(--danger); color:var(--danger); background:var(--dangbg); }
+
+    /* Empty state */
+    .rr-empty {
+      display:flex; flex-direction:column; align-items:center;
+      padding:64px 32px 32px; gap:10px; text-align:center;
+    }
+    .rr-empty-ico { font-size:48px; margin-bottom:4px; }
+    .rr-empty-ttl { font-family:'Syne',sans-serif; font-size:20px; font-weight:700; color:var(--t1); }
+    .rr-empty-sub { font-size:14px; color:var(--t2); line-height:1.6; max-width:260px; }
+
+    /* Nav */
+    .rr-nav {
+      position:fixed; bottom:0; left:50%; transform:translateX(-50%);
+      width:100%; max-width:480px;
+      background:var(--bg);
+      border-top:1px solid var(--bd);
+      display:flex; z-index:30;
+      padding:8px 0 max(env(safe-area-inset-bottom), 6px);
+    }
+    .rr-ntab {
+      flex:1; display:flex; flex-direction:column; align-items:center;
+      gap:3px; padding:5px 4px; border:none; background:none;
+      cursor:pointer; color:var(--t3);
+      font-family:'DM Sans',sans-serif; font-size:10px; font-weight:500;
+      letter-spacing:0.3px; transition:color 0.15s; position:relative;
+    }
     .rr-ntab.on { color:var(--ac); }
-    .rr-fab { position:fixed; bottom:max(calc(env(safe-area-inset-bottom) + 70px), 76px); right:max(calc(50% - 240px + 16px), 16px); width:52px; height:52px; border-radius:15px; background:var(--ac); border:none; display:flex; align-items:center; justify-content:center; z-index:29; box-shadow:0 4px 22px var(--acglow); }
-    .rr-sheet { position:fixed; bottom:0; width:100%; max-width:480px; background:var(--s1); border-radius:22px 22px 0 0; max-height:91vh; overflow-y:auto; z-index:51; padding-bottom:max(env(safe-area-inset-bottom), 16px); animation:sheetUp 0.3s cubic-bezier(0.34,1.4,0.64,1); }
+    .rr-nbadge {
+      position:absolute; top:3px; right:calc(50% - 22px);
+      background:var(--danger); color:#fff;
+      width:15px; height:15px; border-radius:50%;
+      font-size:8px; font-weight:700;
+      display:flex; align-items:center; justify-content:center;
+      font-family:'Space Mono',monospace;
+    }
+
+    /* FAB */
+    .rr-fab {
+      position:fixed;
+      bottom:max(calc(env(safe-area-inset-bottom) + 70px), 76px);
+      right:max(calc(50% - 240px + 16px), 16px);
+      width:52px; height:52px; border-radius:15px;
+      background:var(--ac); border:none; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      box-shadow:0 4px 22px var(--acglow);
+      z-index:29; transition:transform 0.15s, box-shadow 0.15s;
+    }
+    .rr-fab:hover  { transform:translateY(-2px); box-shadow:0 8px 30px var(--acglow); }
+    .rr-fab:active { transform:translateY(0); }
+
+    /* Overlay/Sheet */
+    .rr-overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,0.72);
+      backdrop-filter:blur(8px); z-index:50;
+      display:flex; align-items:flex-end; justify-content:center;
+    }
+    .rr-sheet {
+      background:var(--s1); border-radius:22px 22px 0 0;
+      width:100%; max-width:480px;
+      max-height:91vh; overflow-y:auto;
+      animation:sheetUp 0.28s cubic-bezier(0.34,1.4,0.64,1);
+      padding-bottom:max(env(safe-area-inset-bottom), 16px);
+    }
     @keyframes sheetUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
-    
-    .stagger-item { animation: fadeSlide 0.4s ease forwards; opacity: 0; }
-    @keyframes fadeSlide { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .rr-handle { width:38px; height:4px; border-radius:2px; background:var(--bd); margin:12px auto 0; }
+    .rr-shdr {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:16px 16px 8px;
+    }
+    .rr-sttl {
+      font-family:'Syne',sans-serif; font-size:21px; font-weight:700; color:var(--t1);
+    }
+
+    /* Form elements */
+    .rr-fg { padding:10px 16px; }
+    .rr-lbl {
+      display:block; margin-bottom:7px;
+      font-size:10px; font-weight:700; color:var(--t3);
+      text-transform:uppercase; letter-spacing:1.5px;
+      font-family:'Space Mono',monospace;
+    }
+    .rr-inp {
+      width:100%; padding:11px 13px;
+      border-radius:12px; border:1.5px solid var(--bd);
+      background:var(--s2); color:var(--t1);
+      font-family:'DM Sans',sans-serif; font-size:15px;
+      outline:none; transition:border-color 0.15s;
+    }
+    .rr-inp:focus { border-color:var(--ac); }
+    .rr-inp::placeholder { color:var(--t3); }
+    .rr-sel {
+      width:100%; padding:11px 13px;
+      border-radius:12px; border:1.5px solid var(--bd);
+      background:var(--s2); color:var(--t1);
+      font-family:'DM Sans',sans-serif; font-size:15px;
+      outline:none; cursor:pointer; appearance:none;
+    }
+    .rr-chips { display:flex; flex-wrap:wrap; gap:7px; }
+    .rr-chip {
+      padding:7px 13px; border-radius:20px;
+      border:1.5px solid var(--bd); background:transparent;
+      color:var(--t2); cursor:pointer;
+      font-family:'DM Sans',sans-serif; font-size:13px; font-weight:500;
+      transition:all 0.15s;
+    }
+    .rr-chip:hover { border-color:var(--t2); color:var(--t1); }
+    .rr-chip.on { border-color:var(--ac); background:var(--acbg); color:var(--ac); }
+
+    /* Buttons */
+    .rr-row { display:flex; gap:10px; padding:14px 16px; }
+    .rr-btn-p {
+      flex:1; padding:13px; border-radius:13px; border:none;
+      background:var(--ac); color:#000;
+      font-family:'Syne',sans-serif; font-size:15px; font-weight:700;
+      cursor:pointer; transition:opacity 0.15s, transform 0.1s;
+    }
+    .rr-btn-p:hover  { opacity:0.88; transform:translateY(-1px); }
+    .rr-btn-p:active { transform:translateY(0); }
+    .rr-btn-s {
+      flex:1; padding:13px; border-radius:13px;
+      border:1.5px solid var(--bd); background:transparent;
+      color:var(--t1); font-family:'DM Sans',sans-serif;
+      font-size:15px; font-weight:500; cursor:pointer; transition:background 0.15s;
+    }
+    .rr-btn-s:hover { background:var(--s2); }
+    .rr-btn-s.danger { border-color:var(--danger); color:var(--danger); }
+    .rr-btn-s.danger:hover { background:var(--dangbg); }
+
+    /* Settings */
+    .rr-sgrp {
+      margin:0 12px 14px;
+      background:var(--s1); border:1px solid var(--bd); border-radius:15px;
+      overflow:hidden;
+    }
+    .rr-srow {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:13px 15px; border-bottom:1px solid var(--bd);
+    }
+    .rr-srow:last-child { border-bottom:none; }
+    .rr-slbl { font-size:14px; font-weight:500; color:var(--t1); }
+    .rr-ssub { font-size:12px; color:var(--t2); margin-top:2px; }
+    .rr-toggle {
+      width:44px; height:26px; border-radius:13px;
+      background:var(--bd); border:none; cursor:pointer;
+      position:relative; transition:background 0.2s; flex-shrink:0;
+    }
+    .rr-toggle.on { background:var(--ac); }
+    .rr-tknob {
+      position:absolute; top:3px; left:3px;
+      width:20px; height:20px; border-radius:50%;
+      background:#fff; transition:transform 0.2s; pointer-events:none;
+    }
+    .rr-toggle.on .rr-tknob { transform:translateX(18px); }
+    .rr-sbtn {
+      padding:8px 12px; border-radius:9px;
+      border:1px solid var(--bd); background:var(--s2);
+      color:var(--t1); font-family:'DM Sans',sans-serif;
+      font-size:13px; font-weight:500; cursor:pointer;
+      display:flex; align-items:center; gap:5px; transition:background 0.15s;
+      white-space:nowrap;
+    }
+    .rr-sbtn:hover { background:var(--s3); }
+    .rr-sbtn.danger { border-color:rgba(217,79,61,0.4); color:var(--danger); }
+    .rr-sbtn.danger:hover { background:var(--dangbg); }
+
+    /* Delay options */
+    .rr-dopt {
+      padding:13px 15px; border-radius:12px;
+      border:1.5px solid var(--bd); background:var(--s2);
+      cursor:pointer; font-family:'DM Sans',sans-serif;
+      font-size:15px; font-weight:500; color:var(--t1);
+      display:flex; align-items:center; gap:10px;
+      transition:all 0.15s;
+    }
+    .rr-dopt:hover { border-color:var(--blue); color:var(--blue); background:var(--bluebg); }
+
+    /* Animations */
+    .rr-card { animation:fadeUp 0.2s ease both; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+    .rr-sgrp,.rr-empty,.rr-sec { animation:fadeUp 0.25s ease both; }
+    .rr-demo-btn {
+      margin-top:18px; padding:10px 22px; border-radius:22px;
+      border:1.5px solid var(--ac); background:var(--acbg);
+      color:var(--ac); font-family:'DM Sans',sans-serif;
+      font-size:14px; font-weight:500; cursor:pointer; transition:all 0.15s;
+    }
+    .rr-demo-btn:hover { background:var(--ac); color:#000; }
     `;
 
-    // ─── TaskCard Component ───────────────────────────────────────────────────────
-    function TaskCard({ task, showDate, isCompletedToday, onComplete, onEdit, onDelete, index }) {
-      const [done, setDone] = useState(isCompletedToday);
-      const [swipeX, setSwipeX] = useState(0);
-      const touchStart = useRef({ x: 0, y: 0 });
-      const cardRef = useRef(null);
+    // ─── TaskCard ─────────────────────────────────────────────────────────────────
+    function TaskCard({ task, showDate=false, onComplete, onDelay, onEdit, onDelete }) {
+      const [done, setDone] = useState(false);
+      const t = todayStr();
+      const isOverdue = task.nextDueDate < t;
+      const isToday   = task.nextDueDate === t;
 
-      const isOverdue = task.nextDueDate < todayStr();
-      const cc = catColor(task.category);
-
-      const triggerComplete = () => {
+      const handleComplete = () => {
         setDone(true);
-        confetti({ particleCount: 60, spread: 60, origin: { y: 0.7 }, colors: [cc, '#4db87e', '#ffffff'] });
-        setTimeout(() => onComplete(task.id), 400);
+        setTimeout(() => { onComplete(task.id); setDone(false); }, 350);
       };
 
-      const handleTouchStart = (e) => {
-        touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      };
+      const cc = catColor(task.category);
+      return (
+        <div
+          className={`rr-card ${isOverdue && showDate ? "overdue" : ""} ${done ? "completing" : ""}`}
+          style={{ "--cat-clr": cc }}
+        >
+          <button className={`rr-check ${done ? "done" : ""}`} onClick={handleComplete} aria-label="Complete">
+            <Check size={13} strokeWidth={3} />
+          </button>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div className="rr-tname">{task.name}</div>
+            <div className="rr-tmeta">
+              {task.category && (
+                <span className="rr-badge" style={{ background:cc+"20", color:cc, border:`1px solid ${cc}35` }}>
+                  {task.category}
+                </span>
+              )}
+              <span className="rr-freq">{freqLabel(task.frequency)}</span>
+              {task.timeOfDay && <span className="rr-freq">{TIME_EMOJI[task.timeOfDay]} {task.timeOfDay}</span>}
+              {showDate && (
+                <span className={`rr-datechip ${isOverdue?"overdue":isToday?"today":""}`}>
+                  {dateLabel(task.nextDueDate)}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="rr-acts">
+            <button className="rr-act delay" onClick={() => onDelay(task.id)} title="Delay" aria-label="Delay"><Clock size={12} /></button>
+            <button className="rr-act edit"  onClick={() => onEdit(task)}     title="Edit"  aria-label="Edit"><Edit2 size={12} /></button>
+            <button className="rr-act del"   onClick={() => onDelete(task.id)} title="Delete" aria-label="Delete"><Trash2 size={12} /></button>
+          </div>
+        </div>
+      );
+    }
 
-      const handleTouchMove = (e) => {
-        if (isCompletedToday) return;
-        const dx = e.touches[0].clientX - touchStart.current.x;
-        const dy = e.touches[0].clientY - touchStart.current.y;
-        if (Math.abs(dx) > Math.abs(dy) + 5) { // Prioritize horizontal
-          e.preventDefault(); // Stop vertical scroll
-          setSwipeX(Math.max(-100, Math.min(100, dx)));
-        }
-      };
+    // ─── TodayView ────────────────────────────────────────────────────────────────
+    function TodayView({ groups, total, onComplete, onDelay, onEdit, onDelete, onLoadSamples }) {
+      if (total === 0) return (
+        <div className="rr-empty">
+          <div className="rr-empty-ico">✅</div>
+          <div className="rr-empty-ttl">You're all caught up!</div>
+          <div className="rr-empty-sub">No tasks due today. Add a recurring task to start tracking life maintenance.</div>
+          <button className="rr-demo-btn" onClick={onLoadSamples}>Load sample tasks</button>
+        </div>
+      );
+      return (
+        <div>
+          {groups.map(({ slot, tasks }) => (
+            <div key={slot}>
+              <div className="rr-sec">{TIME_EMOJI[slot] || "⏰"}&nbsp;&nbsp;{slot}</div>
+              {tasks.map(task => (
+                <TaskCard key={task.id} task={task}
+                  onComplete={onComplete} onDelay={onDelay} onEdit={onEdit} onDelete={onDelete} />
+              ))}
+            </div>
+          ))}
+        </div>
+      );
+    }
 
-      const handleTouchEnd = () => {
-        if (swipeX > 75) triggerComplete();
-        else if (swipeX < -75) onDelete(task.id);
-        setSwipeX(0);
+    // ─── UpcomingView ─────────────────────────────────────────────────────────────
+    function UpcomingView({ groups, onComplete, onDelay, onEdit, onDelete }) {
+      if (groups.length === 0) return (
+        <div className="rr-empty">
+          <div className="rr-empty-ico">📅</div>
+          <div className="rr-empty-ttl">Nothing ahead</div>
+          <div className="rr-empty-sub">No upcoming tasks. Tasks will appear here after you add them.</div>
+        </div>
+      );
+      return (
+        <div>
+          {groups.map(({ label, tasks }) => (
+            <div key={label}>
+              <div className="rr-sec">{label}</div>
+              {tasks.map(task => (
+                <TaskCard key={task.id} task={task} showDate
+                  onComplete={onComplete} onDelay={onDelay} onEdit={onEdit} onDelete={onDelete} />
+              ))}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    // ─── SettingsView ─────────────────────────────────────────────────────────────
+    function SettingsView({ prefs, setPref, cats, setCats, onExport, onImport, taskCount, onClear }) {
+      const fileRef = useRef();
+      const [newCat, setNewCat] = useState("");
+
+      const addCat = () => {
+        const v = newCat.trim();
+        if (v && !cats.includes(v)) { setCats(p => [...p, v]); }
+        setNewCat("");
       };
 
       return (
-        <div className={`rr-card-wrapper stagger-item`} style={{ animationDelay: `${index * 0.05}s` }}>
-          <div className="rr-swipe-actions">
-            <span className="rr-swipe-left"><Check size={18}/> Complete</span>
-            <span className="rr-swipe-right">Delete <Trash2 size={18}/></span>
+        <div style={{ paddingTop:6 }}>
+          <div className="rr-sec">🎨&nbsp;&nbsp;Appearance</div>
+          <div className="rr-sgrp">
+            <div className="rr-srow">
+              <div><div className="rr-slbl">Dark Mode</div><div className="rr-ssub">Warm dark / light theme</div></div>
+              <button className={`rr-toggle ${prefs.theme==="dark"?"on":""}`}
+                onClick={() => setPref("theme", prefs.theme==="dark"?"light":"dark")} aria-label="Toggle theme">
+                <div className="rr-tknob" />
+              </button>
+            </div>
           </div>
-          <div 
-            ref={cardRef}
-            className={`rr-card ${done ? 'completed' : ''}`} 
-            style={{ "--cat-clr": cc, transform: `translateX(${swipeX}px)`, transition: swipeX === 0 ? 'transform 0.2s ease-out' : 'none' }}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            onClick={() => !done && onEdit(task)}
-          >
-            <button className={`rr-check ${done ? "done" : ""}`} onClick={(e) => { e.stopPropagation(); !done && triggerComplete(); }}>
-              <Check size={14} strokeWidth={3} />
-            </button>
-            <div style={{ flex:1, minWidth:0, marginLeft:10 }}>
-              <div className="rr-tname" style={{ textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.6 : 1 }}>
-                {task.name}
+
+          <div className="rr-sec">📦&nbsp;&nbsp;Data</div>
+          <div className="rr-sgrp">
+            <div className="rr-srow">
+              <div>
+                <div className="rr-slbl">Local storage</div>
+                <div className="rr-ssub">All data lives on your device only</div>
               </div>
-              <div className="rr-tmeta">
-                <span className="rr-badge" style={{ background:cc+"20", color:cc }}>{task.category}</span>
-                <span style={{ fontSize:11, color:"var(--t3)", fontFamily:"Space Mono" }}>{freqLabel(task.frequency)}</span>
-                {task.streak > 0 && <span className="rr-streak">🔥 {task.streak}</span>}
-                {task.dependsOn && <span className="rr-badge" style={{background:'var(--bluebg)', color:'var(--blue)'}}><Link size={10}/> Stacked</span>}
+              <span style={{ fontFamily:"Space Mono,monospace", fontSize:18, color:"var(--ac)", fontWeight:700 }}>
+                {taskCount}
+              </span>
+            </div>
+            <div className="rr-srow">
+              <div><div className="rr-slbl">Export backup</div><div className="rr-ssub">Download as JSON</div></div>
+              <button className="rr-sbtn" onClick={onExport}><Download size={13} /> Export</button>
+            </div>
+            <div className="rr-srow">
+              <div><div className="rr-slbl">Import backup</div><div className="rr-ssub">Restore from JSON</div></div>
+              <button className="rr-sbtn" onClick={() => fileRef.current?.click()}><Upload size={13} /> Import</button>
+              <input ref={fileRef} type="file" accept=".json" style={{ display:"none" }}
+                onChange={e => { if (e.target.files[0]) onImport(e.target.files[0]); e.target.value=""; }} />
+            </div>
+          </div>
+
+          <div className="rr-sec">🗂&nbsp;&nbsp;Categories</div>
+          <div className="rr-sgrp">
+            <div style={{ padding:"12px 15px" }}>
+              <div style={{ display:"flex", flexWrap:"wrap", gap:8, marginBottom:10 }}>
+                {cats.map(cat => {
+                  const cc = catColor(cat);
+                  const isDefault = DEFAULT_CATS.includes(cat);
+                  return (
+                    <span key={cat} style={{
+                      display:"flex", alignItems:"center", gap:4,
+                      padding:"4px 10px", borderRadius:20,
+                      background:cc+"20", border:`1px solid ${cc}35`, color:cc,
+                      fontSize:12, fontWeight:500,
+                    }}>
+                      {cat}
+                      {!isDefault && (
+                        <button onClick={() => setCats(p => p.filter(c=>c!==cat))}
+                          style={{ background:"none", border:"none", cursor:"pointer", color:"inherit", padding:0, display:"flex", opacity:0.7 }}>
+                          <X size={10} />
+                        </button>
+                      )}
+                    </span>
+                  );
+                })}
               </div>
+              <div style={{ display:"flex", gap:8 }}>
+                <input className="rr-inp" value={newCat} onChange={e=>setNewCat(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&addCat()}
+                  placeholder="Add custom category…" style={{ flex:1, fontSize:13, padding:"9px 12px" }} />
+                <button onClick={addCat} style={{
+                  padding:"9px 13px", borderRadius:10, border:"1px solid var(--bd)",
+                  background:"var(--s2)", color:"var(--t1)", cursor:"pointer", fontSize:13, fontWeight:500
+                }}>Add</button>
+              </div>
+            </div>
+          </div>
+
+          <div className="rr-sec">⚠️&nbsp;&nbsp;Danger Zone</div>
+          <div className="rr-sgrp" style={{ marginBottom:32 }}>
+            <div className="rr-srow">
+              <div>
+                <div className="rr-slbl" style={{ color:"var(--danger)" }}>Clear all data</div>
+                <div className="rr-ssub">Permanently delete all tasks</div>
+              </div>
+              <button className="rr-sbtn danger" onClick={onClear}><Trash2 size={13} /> Clear</button>
             </div>
           </div>
         </div>
       );
     }
 
-    // ─── TaskModal ────────────────────────────────────────────────────────────────
-    function TaskModal({ task, cats, allTasks, onSave, onClose }) {
-      const [name, setName] = useState(task?.name || "");
-      const [category, setCategory] = useState(task?.category || cats[0] || "");
-      const [shortcut, setShortcut] = useState(task?.frequency || SHORTCUTS[1]);
-      const [gracePeriod, setGracePeriod] = useState(task?.gracePeriod || 0);
-      const [dependsOn, setDependsOn] = useState(task?.dependsOn || "");
-      const [startDate, setStartDate] = useState(task?.nextDueDate || todayStr());
-
-      const handleSave = () => {
-        if (!name.trim()) return;
-        onSave({ name: name.trim(), category, frequency: shortcut, gracePeriod: Number(gracePeriod), dependsOn, startDate });
-      };
-
-      return (
-        <>
-          <div style={{position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:50}} onClick={onClose} />
-          <div className="rr-sheet">
-            <div style={{padding:'16px'}}>
-              <h2 style={{fontSize:20, marginBottom:20}}>Configure Task</h2>
-              
-              <label style={{fontSize:11, color:'var(--t3)', textTransform:'uppercase'}}>Task Name</label>
-              <input value={name} onChange={e=>setName(e.target.value)} style={{width:'100%', padding:12, borderRadius:12, border:'1px solid var(--bd)', background:'var(--s2)', color:'var(--t1)', marginBottom:16}} />
-
-              <label style={{fontSize:11, color:'var(--t3)', textTransform:'uppercase'}}>Stack After (Optional)</label>
-              <select value={dependsOn} onChange={e=>setDependsOn(e.target.value)} style={{width:'100%', padding:12, borderRadius:12, border:'1px solid var(--bd)', background:'var(--s2)', color:'var(--t1)', marginBottom:16}}>
-                <option value="">None (Independent)</option>
-                {allTasks.filter(t=>t.id!==task?.id).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-
-              <label style={{fontSize:11, color:'var(--t3)', textTransform:'uppercase'}}>Grace Period (Snooze)</label>
-              <select value={gracePeriod} onChange={e=>setGracePeriod(e.target.value)} style={{width:'100%', padding:12, borderRadius:12, border:'1px solid var(--bd)', background:'var(--s2)', color:'var(--t1)', marginBottom:16}}>
-                <option value={0}>Strict (0 days)</option>
-                <option value={1}>Forgiving (1 day)</option>
-                <option value={3}>Relaxed (3 days)</option>
-              </select>
-
-              <div style={{display:'flex', gap:10, marginTop:20}}>
-                <button onClick={onClose} style={{flex:1, padding:14, borderRadius:12, border:'1px solid var(--bd)', background:'transparent', color:'var(--t1)'}}>Cancel</button>
-                <button onClick={handleSave} style={{flex:1, padding:14, borderRadius:12, border:'none', background:'var(--ac)', color:'#000', fontWeight:'bold'}}>Save</button>
-              </div>
-            </div>
-          </div>
-        </>
-      );
-    }
-
-    // ─── Main App ─────────────────────────────────────────────────────────────────
-    function App() {
-      const [tasks, setTasks] = useState(() => load(STORAGE_KEY, []));
-      const [cats, setCats] = useState(() => load(CATS_KEY, DEFAULT_CATS));
-      const [view, setView] = useState("today");
-      const [modal, setModal] = useState(null);
-
-      // Auto-animate refs for fluid layout shifts
-      const listRefToday = useRef(null);
-      const listRefDone = useRef(null);
-      
-      useEffect(() => { store(STORAGE_KEY, tasks); }, [tasks]);
-      useEffect(() => {
-        if (listRefToday.current) autoAnimate(listRefToday.current);
-        if (listRefDone.current) autoAnimate(listRefDone.current);
-      }, [view]);
-
-      // Notifications Request
-      const requestPush = async () => {
-        if ('Notification' in window) {
-          const perm = await Notification.requestPermission();
-          if (perm === 'granted') new Notification("Recurr", { body: "Notifications active while app is open!" });
-        }
-      };
-
-      const handleSaveTask = (data) => {
-        if (modal.type === 'edit') {
-          setTasks(p => p.map(t => t.id === modal.task.id ? { ...t, ...data } : t));
-        } else {
-          setTasks(p => [...p, { id: uid(), streak: 0, history: [], lastCompleted: null, ...data }]);
-        }
-        setModal(null);
-      };
-
-      const completeTask = (id) => {
-        const tDate = todayStr();
-        setTasks(p => p.map(t => {
-          if (t.id !== id) return t;
-          
-          // Calculate Streak logic based on Grace Period
-          const expected = new Date(t.nextDueDate + "T12:00:00");
-          const completed = new Date();
-          const diffDays = Math.floor((completed - expected) / 86400000);
-          
-          let newStreak = t.streak;
-          if (diffDays <= (t.gracePeriod || 0)) newStreak += 1;
-          else newStreak = 1; // Missed grace period, restart streak
-
-          const newBase = shiftDate(tDate, t.frequency.value, t.frequency.unit);
-          return { ...t, baseDueDate: newBase, nextDueDate: newBase, lastCompleted: tDate, streak: newStreak, history: [...(t.history || []), new Date().toISOString()] };
-        }));
-      };
-
-      const deleteTask = (id) => setTasks(p => p.filter(t => t.id !== id));
-
-      // View filtering
+    // ─── DelayModal ───────────────────────────────────────────────────────────────
+    function DelayModal({ taskName, onDelay, onClose }) {
+      const opts = [
+        { label:"+1 Day",   days:1  },
+        { label:"+3 Days",  days:3  },
+        { label:"+1 Week",  days:7  },
+        { label:"+2 Weeks", days:14 },
+      ];
       const t = todayStr();
-      const activeTasks = tasks.filter(task => task.nextDueDate <= t && task.lastCompleted !== t);
-      const doneToday = tasks.filter(task => task.lastCompleted === t);
-      const historyEntries = tasks.flatMap(t => (t.history || []).map(d => ({ name: t.name, date: new Date(d) }))).sort((a,b) => b.date - a.date);
-
       return (
-        <div className="rr">
-          <style>{STYLES}</style>
-
-          <div className="rr-header">
-            <div>
-              <div className="rr-logo">Recurr</div>
-              <div className="rr-header-sub">{new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</div>
+        <div className="rr-overlay" onClick={onClose}>
+          <div className="rr-sheet" onClick={e=>e.stopPropagation()}>
+            <div className="rr-handle" />
+            <div className="rr-shdr">
+              <span className="rr-sttl">Delay Task</span>
+              <button className="rr-hbtn" onClick={onClose} aria-label="Close"><X size={17} /></button>
             </div>
-            <button onClick={requestPush} style={{background:'none', border:'none', color:'var(--t2)'}}><Bell size={20}/></button>
-          </div>
-
-          <div className="rr-content">
-            {view === "today" && (
-              <div style={{paddingTop: 10}}>
-                <div className="rr-sec">To Do</div>
-                <div ref={listRefToday}>
-                  {activeTasks.length === 0 ? 
-                    <div style={{textAlign:'center', padding:40, color:'var(--t3)'}}>All caught up! 🎉</div> :
-                    activeTasks.map((task, i) => (
-                      <TaskCard key={task.id} task={task} index={i} isCompletedToday={false} onComplete={completeTask} onEdit={t=>setModal({type:'edit', task:t})} onDelete={deleteTask} />
-                    ))
-                  }
-                </div>
-
-                {doneToday.length > 0 && (
-                  <>
-                    <div className="rr-sec" style={{marginTop: 20}}>Completed Today</div>
-                    <div ref={listRefDone}>
-                      {doneToday.map((task, i) => (
-                        <TaskCard key={task.id} task={task} index={i} isCompletedToday={true} onComplete={()=>{}} onEdit={()=>{}} onDelete={()=>{}} />
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {view === "history" && (
-              <div style={{padding: '0 16px', paddingTop:10}}>
-                <div className="rr-sec">Recent Completions</div>
-                {historyEntries.slice(0, 30).map((h, i) => (
-                  <div key={i} className="stagger-item" style={{display:'flex', justifyContent:'space-between', padding:'12px 0', borderBottom:'1px solid var(--bd)', animationDelay:`${i*0.03}s`}}>
-                    <span style={{color:'var(--t1)', fontSize:14}}>{h.name}</span>
-                    <span style={{color:'var(--t3)', fontSize:12}}>{h.date.toLocaleDateString()}</span>
-                  </div>
+            <div style={{ padding:"0 16px 8px" }}>
+              {taskName && <p style={{ fontSize:14, fontWeight:500, color:"var(--t1)", marginBottom:6 }}>"{taskName}"</p>}
+              <p style={{ fontSize:13, color:"var(--t2)", lineHeight:1.55, marginBottom:14 }}>
+                Delays this occurrence only. The recurrence base stays the same, so the <em>next</em> due date is unaffected.
+              </p>
+              <div style={{ display:"flex", flexDirection:"column", gap:9 }}>
+                {opts.map(({ label, days }) => (
+                  <button key={days} className="rr-dopt" onClick={() => onDelay(days)}>
+                    <Clock size={16} />
+                    <span>{label}</span>
+                    <span style={{ marginLeft:"auto", fontSize:11, color:"var(--t3)", fontFamily:"Space Mono,monospace" }}>
+                      → {dateLabel(shiftDate(t, days, "days"))}
+                    </span>
+                  </button>
                 ))}
               </div>
-            )}
+            </div>
+            <div className="rr-row">
+              <button className="rr-btn-s" onClick={onClose}>Cancel</button>
+            </div>
           </div>
-
-          <button className="rr-fab" onClick={() => setModal({type:'add'})}><Plus size={24} color="#000"/></button>
-
-          <nav className="rr-nav">
-            <button className={`rr-ntab ${view==="today"?"on":""}`} onClick={()=>setView("today")}><Home size={20}/>Today</button>
-            <button className={`rr-ntab ${view==="history"?"on":""}`} onClick={()=>setView("history")}><History size={20}/>History</button>
-          </nav>
-
-          {modal && <TaskModal task={modal.task} cats={cats} allTasks={tasks} onSave={handleSaveTask} onClose={()=>setModal(null)} />}
         </div>
       );
     }
 
+    // ─── TaskModal (Add / Edit) ───────────────────────────────────────────────────
+    function TaskModal({ task, cats, setCats, onSave, onDelete, onClose }) {
+      const isEdit = !!task;
+      const initFreq = task?.frequency;
+      const initIsCustom = initFreq ? !SHORTCUTS.some(s=>s.value===initFreq.value&&s.unit===initFreq.unit) : false;
+
+      const [name,       setName]       = useState(task?.name || "");
+      const [category,   setCategory]   = useState(task?.category || cats[0] || "");
+      const [shortcut,   setShortcut]   = useState(initFreq || SHORTCUTS[2]);
+      const [useCustom,  setUseCustom]  = useState(initIsCustom);
+      const [custVal,    setCustVal]    = useState(initFreq?.value || 2);
+      const [custUnit,   setCustUnit]   = useState(initFreq?.unit  || "weeks");
+      const [timeOfDay,  setTimeOfDay]  = useState(task?.timeOfDay || null);
+      const [startDate,  setStartDate]  = useState(task?.nextDueDate || todayStr());
+      const [newCat,     setNewCat]     = useState("");
+      const [err,        setErr]        = useState("");
+
+      const freq = useCustom ? { value: Number(custVal), unit: custUnit } : shortcut;
+
+      const handleSave = () => {
+        if (!name.trim()) { setErr("Task name is required."); return; }
+        onSave({ name: name.trim(), category, frequency: freq, timeOfDay, startDate });
+      };
+
+      const addNewCat = () => {
+        const v = newCat.trim();
+        if (!v) return;
+        if (!cats.includes(v)) setCats(p => [...p, v]);
+        setCategory(v);
+        setNewCat("");
+      };
+
+      return (
+        <div className="rr-overlay" onClick={onClose}>
+          <div className="rr-sheet" onClick={e=>e.stopPropagation()}>
+            <div className="rr-handle" />
+            <div className="rr-shdr">
+              <span className="rr-sttl">{isEdit ? "Edit Task" : "New Task"}</span>
+              <button className="rr-hbtn" onClick={onClose} aria-label="Close"><X size={17} /></button>
+            </div>
+
+            {/* Name */}
+            <div className="rr-fg">
+              <label className="rr-lbl">Task Name</label>
+              <input className="rr-inp" value={name} autoFocus
+                onChange={e=>{ setName(e.target.value); setErr(""); }}
+                onKeyDown={e=>e.key==="Enter"&&handleSave()}
+                placeholder="e.g. Change oil, Order diapers, Call mom…" />
+              {err && <p style={{ color:"var(--danger)", fontSize:12, marginTop:5 }}>{err}</p>}
+            </div>
+
+            {/* Category */}
+            <div className="rr-fg">
+              <label className="rr-lbl">Category</label>
+              <select className="rr-sel" value={category} onChange={e=>setCategory(e.target.value)}>
+                {cats.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <div style={{ display:"flex", gap:8, marginTop:8 }}>
+                <input className="rr-inp" value={newCat} onChange={e=>setNewCat(e.target.value)}
+                  onKeyDown={e=>e.key==="Enter"&&addNewCat()}
+                  placeholder="New category…" style={{ flex:1, fontSize:13, padding:"9px 12px" }} />
+                <button onClick={addNewCat} style={{
+                  padding:"9px 13px", borderRadius:10, border:"1px solid var(--bd)",
+                  background:"var(--s2)", color:"var(--t1)", cursor:"pointer", fontSize:13, whiteSpace:"nowrap"
+                }}>+ Add</button>
+              </div>
+            </div>
+
+            {/* Frequency */}
+            <div className="rr-fg">
+              <label className="rr-lbl">Repeat Every</label>
+              <div className="rr-chips" style={{ marginBottom:10 }}>
+                {SHORTCUTS.map(s => (
+                  <button key={s.label}
+                    className={`rr-chip ${!useCustom && shortcut.value===s.value && shortcut.unit===s.unit ? "on":""}`}
+                    onClick={() => { setShortcut(s); setUseCustom(false); }}>
+                    {s.label}
+                  </button>
+                ))}
+                <button className={`rr-chip ${useCustom?"on":""}`} onClick={() => setUseCustom(true)}>
+                  Custom…
+                </button>
+              </div>
+              {useCustom && (
+                <div style={{ display:"flex", gap:8 }}>
+                  <input type="number" min={1} max={999} className="rr-inp"
+                    value={custVal} onChange={e=>setCustVal(e.target.value)}
+                    style={{ width:78, flex:"0 0 78px" }} />
+                  <select className="rr-sel" value={custUnit} onChange={e=>setCustUnit(e.target.value)}>
+                    <option value="days">Days</option>
+                    <option value="weeks">Weeks</option>
+                    <option value="months">Months</option>
+                    <option value="years">Years</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Time of day */}
+            <div className="rr-fg">
+              <label className="rr-lbl">Time of Day <span style={{ fontWeight:400, textTransform:"none", letterSpacing:0, color:"var(--t3)", fontFamily:"DM Sans" }}>(optional)</span></label>
+              <div className="rr-chips">
+                {TIME_SLOTS.map(slot => (
+                  <button key={slot}
+                    className={`rr-chip ${timeOfDay===slot?"on":""}`}
+                    onClick={() => setTimeOfDay(timeOfDay===slot ? null : slot)}>
+                    {TIME_EMOJI[slot]} {slot}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Start date */}
+            <div className="rr-fg">
+              <label className="rr-lbl">First Due Date</label>
+              <input type="date" className="rr-inp" value={startDate}
+                onChange={e=>setStartDate(e.target.value)}
+                style={{ colorScheme: "dark" }} />
+            </div>
+
+            {/* Buttons */}
+            <div className="rr-row">
+              {isEdit && onDelete && (
+                <button className="rr-btn-s danger" onClick={onDelete}
+                  style={{ flex:"0 0 auto", padding:"13px 14px" }}>
+                  <Trash2 size={15} />
+                </button>
+              )}
+              <button className="rr-btn-s" onClick={onClose}>Cancel</button>
+              <button className="rr-btn-p" onClick={handleSave}>{isEdit ? "Save Changes" : "Add Task"}</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── Root Application ─────────────────────────────────────────────────────────
+    function App() {
+      const [tasks,  setTasks]  = useState(() => load(STORAGE_KEY, []));
+      const [prefs,  setPrefs]  = useState(() => ({ theme:"dark", ...load(PREFS_KEY, {}) }));
+      const [cats,   setCats]   = useState(() => load(CATS_KEY, DEFAULT_CATS));
+      const [view,   setView]   = useState("today");
+      const [modal,  setModal]  = useState(null);   // null | {type:'add'} | {type:'edit', task}
+      const [dlyId,  setDlyId]  = useState(null);   // task id for delay modal
+
+      useEffect(() => { store(STORAGE_KEY, tasks); }, [tasks]);
+      useEffect(() => { store(PREFS_KEY,   prefs); }, [prefs]);
+      useEffect(() => { store(CATS_KEY,    cats);  }, [cats]);
+
+      const setPref = (k,v) => setPrefs(p=>({...p,[k]:v}));
+      const dark = prefs.theme === "dark";
+
+      // ── Task Operations ──
+      const addTask = useCallback((data) => {
+        setTasks(p => [...p, {
+          id: uid(), name:data.name, category:data.category,
+          frequency:data.frequency, timeOfDay:data.timeOfDay || null,
+          nextDueDate: data.startDate || todayStr(),
+          baseDueDate: data.startDate || todayStr(),
+          createdAt: new Date().toISOString(), lastCompleted: null,
+        }]);
+      }, []);
+
+      const updateTask = useCallback((id, data) => {
+        setTasks(p => p.map(t => {
+          if (t.id !== id) return t;
+          return {
+            ...t, name:data.name, category:data.category,
+            frequency:data.frequency, timeOfDay:data.timeOfDay || null,
+            nextDueDate: data.startDate, baseDueDate: data.startDate,
+          };
+        }));
+      }, []);
+
+      const deleteTask  = useCallback((id) => setTasks(p=>p.filter(t=>t.id!==id)), []);
+
+      const completeTask = useCallback((id) => {
+        setTasks(p => p.map(t => {
+          if (t.id !== id) return t;
+          const newBase = shiftDate(t.baseDueDate, t.frequency.value, t.frequency.unit);
+          return { ...t, baseDueDate:newBase, nextDueDate:newBase, lastCompleted:new Date().toISOString() };
+        }));
+      }, []);
+
+      const delayTask = useCallback((id, days) => {
+        setTasks(p => p.map(t =>
+          t.id!==id ? t : { ...t, nextDueDate:shiftDate(t.nextDueDate, days, "days") }
+        ));
+      }, []);
+
+      const loadSamples = () => {
+        const t = todayStr();
+        const samples = SAMPLE_TASKS.map(s => ({
+          id: uid(),
+          name: s.name, category: s.category,
+          frequency: s.frequency, timeOfDay: s.timeOfDay,
+          nextDueDate: shiftDate(t, s.daysFromNow, "days"),
+          baseDueDate: shiftDate(t, s.daysFromNow, "days"),
+          createdAt: new Date().toISOString(), lastCompleted: null,
+        }));
+        setTasks(samples);
+      };
+
+      // ── Derived ──
+      const t = todayStr();
+      const todayTasks    = tasks.filter(task => task.nextDueDate <= t);
+      const upcomingTasks = tasks.filter(task => task.nextDueDate >  t)
+        .sort((a,b) => a.nextDueDate.localeCompare(b.nextDueDate));
+
+      const todayByTime = [...TIME_SLOTS, "Anytime"].map(slot => ({
+        slot,
+        tasks: slot==="Anytime"
+          ? todayTasks.filter(task => !task.timeOfDay)
+          : todayTasks.filter(task => task.timeOfDay===slot),
+      })).filter(g => g.tasks.length > 0);
+
+      const d1=shiftDate(t,1,"days"), d7=shiftDate(t,7,"days"),
+            d14=shiftDate(t,14,"days"), d30=shiftDate(t,30,"days");
+
+      const upcomingGroups = [
+        { label:"Tomorrow",   tasks: upcomingTasks.filter(x => x.nextDueDate===d1) },
+        { label:"This Week",  tasks: upcomingTasks.filter(x => x.nextDueDate>d1  && x.nextDueDate<=d7)  },
+        { label:"Next Week",  tasks: upcomingTasks.filter(x => x.nextDueDate>d7  && x.nextDueDate<=d14) },
+        { label:"This Month", tasks: upcomingTasks.filter(x => x.nextDueDate>d14 && x.nextDueDate<=d30) },
+        { label:"Future",     tasks: upcomingTasks.filter(x => x.nextDueDate>d30) },
+      ].filter(g => g.tasks.length > 0);
+
+      // ── Import / Export ──
+      const exportData = () => {
+        const blob = new Blob(
+          [JSON.stringify({ tasks, categories:cats, preferences:prefs, exportedAt:new Date().toISOString() }, null, 2)],
+          { type:"application/json" }
+        );
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href=url; a.download=`recurr-backup-${t}.json`; a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      const importData = (file) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = JSON.parse(e.target.result);
+            if (window.confirm("Replace current data with this backup?")) {
+              if (data.tasks)       setTasks(data.tasks);
+              if (data.categories)  setCats(data.categories);
+              if (data.preferences) setPrefs(p=>({...p,...data.preferences}));
+            }
+          } catch { alert("Invalid backup file."); }
+        };
+        reader.readAsText(file);
+      };
+
+      const clearData = () => {
+        if (window.confirm("Delete ALL tasks? This cannot be undone.")) {
+          setTasks([]); setCats(DEFAULT_CATS);
+        }
+      };
+
+      // ── Header meta ──
+      const now = new Date();
+      const dateLine = now.toLocaleDateString("en-US",{ weekday:"long", month:"long", day:"numeric" });
+      const viewSub = {
+        today:    dateLine,
+        upcoming: `${upcomingTasks.length} task${upcomingTasks.length!==1?"s":""} ahead`,
+        settings: "Preferences & data",
+      };
+
+      const delayTask_ = tasks.find(t=>t.id===dlyId);
+
+      return (
+        <div className={`rr ${dark ? "" : "light"}`}>
+          <style>{STYLES}</style>
+
+          {/* Header */}
+          <div className="rr-header">
+            <div>
+              <div className="rr-logo">
+                <div className="rr-logo-dot" />
+                {view==="today" ? "Recurr" : view==="upcoming" ? "Upcoming" : "Settings"}
+              </div>
+              <div className="rr-header-sub">{viewSub[view]}</div>
+            </div>
+            <button className="rr-hbtn" onClick={()=>setPref("theme",dark?"light":"dark")} aria-label="Toggle theme">
+              {dark ? <Sun size={16}/> : <Moon size={16}/>}
+            </button>
+          </div>
+
+          {/* Main content */}
+          <div className="rr-content">
+            {view==="today" && (
+              <TodayView groups={todayByTime} total={todayTasks.length}
+                onComplete={completeTask} onDelay={setDlyId} onEdit={task=>setModal({type:"edit",task})}
+                onDelete={deleteTask} onLoadSamples={loadSamples} />
+            )}
+            {view==="upcoming" && (
+              <UpcomingView groups={upcomingGroups}
+                onComplete={completeTask} onDelay={setDlyId} onEdit={task=>setModal({type:"edit",task})}
+                onDelete={deleteTask} />
+            )}
+            {view==="settings" && (
+              <SettingsView prefs={prefs} setPref={setPref} cats={cats} setCats={setCats}
+                onExport={exportData} onImport={importData} taskCount={tasks.length} onClear={clearData} />
+            )}
+          </div>
+
+          {/* FAB */}
+          {view!=="settings" && (
+            <button className="rr-fab" onClick={()=>setModal({type:"add"})} aria-label="Add task">
+              <Plus size={22} color="#000" strokeWidth={2.5}/>
+            </button>
+          )}
+
+          {/* Bottom Nav */}
+          <nav className="rr-nav" role="navigation" aria-label="Main navigation">
+            {[
+              { id:"today",    icon:<Home size={20}/>,     label:"Today"    },
+              { id:"upcoming", icon:<Calendar size={20}/>, label:"Upcoming" },
+              { id:"settings", icon:<Settings size={20}/>, label:"Settings" },
+            ].map(tab => (
+              <button key={tab.id} className={`rr-ntab ${view===tab.id?"on":""}`}
+                onClick={()=>setView(tab.id)} style={{ position:"relative" }}>
+                {tab.icon}
+                {tab.id==="today" && todayTasks.length>0 && (
+                  <span className="rr-nbadge">{todayTasks.length>9?"9+":todayTasks.length}</span>
+                )}
+                {tab.label}
+              </button>
+            ))}
+          </nav>
+
+          {/* Task Modal */}
+          {(modal?.type==="add" || modal?.type==="edit") && (
+            <TaskModal
+              task={modal.type==="edit" ? modal.task : null}
+              cats={cats} setCats={setCats}
+              onSave={data => {
+                if (modal.type==="edit") updateTask(modal.task.id, data);
+                else addTask(data);
+                setModal(null);
+              }}
+              onDelete={modal.type==="edit" ? ()=>{ deleteTask(modal.task.id); setModal(null); } : null}
+              onClose={()=>setModal(null)}
+            />
+          )}
+
+          {/* Delay Modal */}
+          {dlyId && (
+            <DelayModal taskName={delayTask_?.name}
+              onDelay={days=>{ delayTask(dlyId, days); setDlyId(null); }}
+              onClose={()=>setDlyId(null)} />
+          )}
+        </div>
+      );
+    }
+
+    // Mount the Application
     const root = createRoot(document.getElementById("root"));
     root.render(<App />);
   </script>
