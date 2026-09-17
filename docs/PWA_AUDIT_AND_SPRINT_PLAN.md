@@ -36,16 +36,16 @@ Severity: 🔴 Blocker (no PWA without it) · 🟠 High (bugs or data loss) · �
 
 ### B. Build & runtime architecture
 
-- [ ] 🔴 **B1. Babel compiles JSX in the browser on every launch.** It downloads ~3 MB, is slow to start, and can't be precached reliably.
+- [x] 🔴 **B1. Babel compiles JSX in the browser on every launch.** It downloads ~3 MB, is slow to start, and can't be precached reliably.
   → Move to **Vite + React**: `src/main.jsx`, `src/App.jsx`, and components split into files.
-- [ ] 🔴 **B2. Runtime CDN dependencies** (esm.sh, unpkg). If they're offline or blocked, the app shows a blank screen. The Babel version is unpinned, so an upstream release can break the app.
+- [x] 🔴 **B2. Runtime CDN dependencies** (esm.sh, unpkg). If they're offline or blocked, the app shows a blank screen. The Babel version is unpinned, so an upstream release can break the app.
   → Install `react`, `react-dom`, `lucide-react` from npm and bundle them. Import only the icons the app uses, so unused ones are tree-shaken.
-- [ ] 🟠 **B3. Google Fonts `@import` inside the rendered `<style>`.** Fonts fail offline, the page flashes unstyled text, and the whole CSS string is re-injected on every render.
+- [x] 🟠 **B3. Google Fonts `@import` inside the rendered `<style>`.** Fonts fail offline, the page flashes unstyled text, and the whole CSS string is re-injected on every render.
   → Self-host Syne / DM Sans / Space Mono (`@fontsource/*`), move CSS into a static `.css` file, and add `font-display: swap`.
 - [ ] 🟡 **B4. No package.json, lint, tests, or CI.**
   → Add ESLint, Vitest, and a GitHub Actions workflow (lint → test → build → deploy).
-- [ ] ⚪ **B5. Unused imports:** `Bell`, `RotateCcw`, `ChevronRight`, `AlertTriangle`.
-- [ ] ⚪ **B6. No README, license, or deploy target** documented.
+- [x] ⚪ **B5. Unused imports:** `Bell`, `RotateCcw`, `ChevronRight`, `AlertTriangle`.
+- [x] ⚪ **B6. No README, license, or deploy target** documented.
 
 ### C. Mobile shell / native feel
 
@@ -128,13 +128,13 @@ Severity: 🔴 Blocker (no PWA without it) · 🟠 High (bugs or data loss) · �
 
 ### H. Deployment & quality gates
 
-- [ ] 🔴 **H1. No hosting over HTTPS is set up** (service workers require it).
+- [x] 🔴 **H1. No hosting over HTTPS is set up** (service workers require it).
   → GitHub Pages through Actions (`base: "/recurr/"`), or Netlify/Vercel.
 - [ ] 🟡 **H2. No Lighthouse/PWA checks.**
   → Add Lighthouse CI to Actions with thresholds (PWA installable, Performance ≥ 90, Accessibility ≥ 95).
 - [ ] 🟡 **H3. No unit tests for date math** (D1–D5 are exactly the kind of bug tests catch).
   → Use Vitest with TZ matrix runs (`TZ=Pacific/Kiritimati`, `America/Los_Angeles`, `UTC`).
-- [ ] ⚪ **H4. No error boundary.** A render error blanks the screen with no recovery.
+- [x] ⚪ **H4. No error boundary.** A render error blanks the screen with no recovery.
   → Add an error boundary with "Export data / Reset" options.
 
 ---
@@ -143,7 +143,7 @@ Severity: 🔴 Blocker (no PWA without it) · 🟠 High (bugs or data loss) · �
 
 Assumes 1 developer, **1-week sprints**, and 6 sprints in total. Each sprint ends in a deployable build.
 
-### Sprint 1 — Foundation: real build (B1–B6, H1, H4)
+### Sprint 1 — Foundation: real build (B1–B6, H1, H4) ✅ Done 2026-09-17
 **Goal:** Same app and look, but bundled, with no runtime CDNs, deployed over HTTPS.
 
 | # | Task | Items | Est |
